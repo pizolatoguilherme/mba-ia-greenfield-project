@@ -118,3 +118,65 @@ Content-Type: {{contentType}}
   "token": "{{resetToken}}",
   "new_password": "new-password123"
 }
+
+
+###
+# ─────────────────────────────────────────────
+# VÍDEOS — upload multipart pré-assinado (fase 03)
+# ─────────────────────────────────────────────
+# Fluxo: (10) cria o rascunho → (11) assina URLs das partes → PUT de cada
+# parte direto no storage (fora da API) → (12) lista partes para retomar →
+# (13) conclui. O worker processa e o vídeo vai a `ready`.
+@publicId = cole-o-publicId-aqui
+
+### 10. Iniciar upload (cria o vídeo em draft)
+POST {{baseUrl}}/videos
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Meu vídeo",
+  "filename": "clip.mp4",
+  "size": 33554432,
+  "contentType": "video/mp4"
+}
+
+
+### 11. Assinar URLs de PUT das partes (válidas por 1 h)
+POST {{baseUrl}}/videos/{{publicId}}/upload/part-urls
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "partNumbers": [1, 2]
+}
+
+
+### 12. Listar partes já enviadas (retomada)
+GET {{baseUrl}}/videos/{{publicId}}/upload/parts
+Authorization: Bearer {{accessToken}}
+
+
+### 13. Concluir upload (use os ETags devolvidos pelos PUTs)
+POST {{baseUrl}}/videos/{{publicId}}/upload/complete
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "parts": [
+    { "partNumber": 1, "etag": "\"etag-da-parte-1\"" },
+    { "partNumber": 2, "etag": "\"etag-da-parte-2\"" }
+  ]
+}
+
+
+### 14. Consultar o vídeo pela URL única (público)
+GET {{baseUrl}}/videos/{{publicId}}
+
+
+### 15. URL de reprodução (público, vídeo ready; válida por 6 h)
+GET {{baseUrl}}/videos/{{publicId}}/stream
+
+
+### 16. URL de download com o nome original (público, vídeo ready)
+GET {{baseUrl}}/videos/{{publicId}}/download
