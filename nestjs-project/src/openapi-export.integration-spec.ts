@@ -128,4 +128,60 @@ describe('exportSpec (integration)', () => {
       }
     }
   });
+
+  describe('videos endpoints (phase 03)', () => {
+    type Operation = { responses: Record<string, unknown> };
+    type Paths = Record<string, Record<string, Operation>>;
+
+    const videoEndpoints: { path: string; method: string; codes: string[] }[] =
+      [
+        { path: '/videos', method: 'post', codes: ['201', '400', '401'] },
+        {
+          path: '/videos/{publicId}/upload/part-urls',
+          method: 'post',
+          codes: ['200', '400', '401', '403', '404', '409'],
+        },
+        {
+          path: '/videos/{publicId}/upload/parts',
+          method: 'get',
+          codes: ['200', '401', '403', '404', '409'],
+        },
+        {
+          path: '/videos/{publicId}/upload/complete',
+          method: 'post',
+          codes: ['202', '400', '401', '403', '404', '409', '413'],
+        },
+        { path: '/videos/{publicId}', method: 'get', codes: ['200', '404'] },
+        {
+          path: '/videos/{publicId}/stream',
+          method: 'get',
+          codes: ['200', '404', '409'],
+        },
+        {
+          path: '/videos/{publicId}/download',
+          method: 'get',
+          codes: ['200', '404', '409'],
+        },
+      ];
+
+    it('exposes the 7 /videos endpoints with their Error Catalog status codes', () => {
+      const paths = document.paths as Paths;
+
+      for (const { path, method, codes } of videoEndpoints) {
+        const operation = paths[path]?.[method];
+        expect(operation).toBeDefined();
+        expect(Object.keys(operation.responses)).toEqual(
+          expect.arrayContaining(codes),
+        );
+      }
+    });
+
+    it('matches the committed openapi.json', () => {
+      const committed = JSON.parse(
+        readFileSync(join(__dirname, '..', 'openapi.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+
+      expect(document).toEqual(committed);
+    });
+  });
 });
