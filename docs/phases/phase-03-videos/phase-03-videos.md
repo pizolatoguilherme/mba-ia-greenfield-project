@@ -5,7 +5,7 @@ test_specs_aware: true
 sources_mtime:
   docs/phases/phase-03-videos/context.md: "2026-11-14T10:05:05-03:00"
   docs/phases/phase-03-videos/library-refs.md: "2026-11-14T10:04:29-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T10:03:29-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T10:28:20-03:00"
   docs/decisions/technical-decisions-video-upload-delivery-limits.md: "2026-11-14T09:54:48-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-14T07:56:05-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-11-14T07:56:05-03:00"
@@ -506,6 +506,25 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 
 ---
 
+### SI-03.16 (amendment of SI-03.1) — Cliente Redis fixado em ioredis ^5.11.1
+
+**Description:** Registra a mudança retroativa da SI-03.1: o cliente Redis do BullMQ é `ioredis@^5.11.1`, e não `^6.0.0`, porque o `typeorm@0.3.28` declara peer opcional `ioredis@^5.0.4`; a opção A da TD-02 (BullMQ + Redis) não muda.
+
+**Technical actions:**
+
+1. Manter `ioredis@^5.11.1` em `nestjs-project/package.json` e no `package-lock.json` — instalado na SI-03.1 sem `--force`/`--legacy-peer-deps` (per `phase-03-videos/TD-02` Revision 2026-11-14)
+
+**Tests:** _(empty — Infra)_
+
+**Dependencies:** SI-03.1 — dependências instaladas
+
+**Acceptance criteria:**
+
+- `npm ls ioredis` no container lista `ioredis@5.x` como dependência direta e sob `bullmq`, sem `invalid` nem `ERESOLVE`
+- `npm install` no container conclui sem conflito de peer dependency
+
+---
+
 ## Technical Specifications
 
 ### Data Model
@@ -814,6 +833,7 @@ SI-03.1 (root) — MinIO, Redis e configs
 │   └── SI-03.8 — depends on SI-03.1 + SI-03.2 (Redis/MinIO/configs e StorageModule)
 SI-03.3 (root, independent) — entidade Video e migration
 SI-03.15 — depends on SI-03.14 + SI-03.10 + SI-03.11 (documenta endpoints e worker completos)
+SI-03.16 — depends on SI-03.1 (amendment: ioredis ^5.11.1 per TD-02 Revision 2026-11-14)
 ```
 
 ---
@@ -835,6 +855,7 @@ SI-03.15 — depends on SI-03.14 + SI-03.10 + SI-03.11 (documenta endpoints e wo
 - [ ] SI-03.13 — Endpoint GET /videos/:publicId/stream
 - [ ] SI-03.14 — Endpoint GET /videos/:publicId/download
 - [ ] SI-03.15 — Documentação: CLAUDE.md e contrato OpenAPI
+- [ ] SI-03.16 (amendment of SI-03.1) — Cliente Redis fixado em ioredis ^5.11.1
 
 **Full test suites:**
 
