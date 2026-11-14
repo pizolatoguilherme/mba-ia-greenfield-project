@@ -3,7 +3,7 @@ kind: phase
 name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-11-14T07:55:58-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T10:03:29-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T10:28:20-03:00"
   docs/decisions/technical-decisions-video-upload-delivery-limits.md: "2026-11-14T09:54:48-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-14T07:56:05-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-11-14T07:56:05-03:00"
@@ -58,7 +58,8 @@ Upload de arquivos grandes sem travar o sistema, processamento automático do v�
 | Ref | Source | Scope | Topic | Status | Decision | Libraries |
 |-----|--------|-------|-------|--------|----------|-----------|
 | phase-03-videos/TD-01 | phase | Backend | Storage Layout — Buckets and Object Key Scheme | decided | B (separate videos / thumbnails buckets, UUID-derived keys) | — |
-| phase-03-videos/TD-02 | phase | Backend | Background Job Queue Technology | decided | A (BullMQ + Redis via `@nestjs/bullmq`) | bullmq@^6.7.6, @nestjs/bullmq@^12.0.2, ioredis@^6.0.0 |
+| phase-03-videos/TD-02 | phase | Backend | Background Job Queue Technology | decided | A (BullMQ + Redis via `@nestjs/bullmq`) | bullmq@^6.7.6, @nestjs/bullmq@^12.0.2, ioredis@^5.11.1 |
+|     └─ Last revision: 2026-11-14 — Redis client pinned to `ioredis@^5.11.1` instead of `^6.0.0`: `typeorm@0.3.28`… | | | | | | |
 | phase-03-videos/TD-03 | phase | Cross-layer | Upload Protocol for Files up to 10 GB | decided | A (presigned S3 multipart, client → storage directly) | @aws-sdk/client-s3@^3.1169.0, @aws-sdk/s3-request-presigner@^3.1169.0 |
 |     └─ Last revision: 2026-11-14 — Upload-init contract: the request carries `filename`, `size`, `contentType` and… | | | | | | |
 | phase-03-videos/TD-04 | phase | Cross-layer | Presigned URL Endpoint Topology (internal vs public host) | decided | A (internal `S3_ENDPOINT` + public `S3_PUBLIC_ENDPOINT`) | — |
@@ -106,7 +107,10 @@ _Source files:_
 ### phase-03-videos/TD-02
 
 **Recommendation:** BullMQ + Redis via `@nestjs/bullmq`. It is the documented NestJS path, and the processing job needs exactly what it ships: attempts with backoff, `jobId` deduplication for idempotent enqueue, worker concurrency, and a job scheduler (used by TD-11). The one cost is one extra container, which is the queue box the architecture diagram already reserves. Option B is the natural fallback if an extra container must be avoided, since application code would not change. Its newness argues against making it the default for the core pipeline.
-**Libraries:** bullmq@^6.7.6, @nestjs/bullmq@^12.0.2, ioredis@^6.0.0
+**Libraries:** bullmq@^6.7.6, @nestjs/bullmq@^12.0.2, ioredis@^5.11.1
+
+**Revisions:**
+- 2026-11-14 — Redis client pinned to `ioredis@^5.11.1` instead of `^6.0.0`: `typeorm@0.3.28` declares the optional peer `ioredis@^5.0.4` and npm rejects ioredis 6 (ERESOLVE), while `bullmq@6.7.6` accepts `ioredis >=5.0.0`; Option A (BullMQ + Redis) is unchanged. Rationale: compatibilidade de peer dependency com o typeorm instalado, detectada na SI-03.1 do /implement 3.
 
 ### phase-03-videos/TD-03
 
