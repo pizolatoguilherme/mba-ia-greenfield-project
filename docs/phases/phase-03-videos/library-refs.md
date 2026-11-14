@@ -9,9 +9,9 @@ libs:
     context7_id: "/nestjs/bull"
     fetched_at: "2026-11-14T10:04:00-03:00"
   "ioredis":
-    version: "^6.0.0"
-    context7_id: "/redis/ioredis/v6.0.0"
-    fetched_at: "2026-11-14T10:04:00-03:00"
+    version: "^5.11.1"
+    context7_id: "/redis/ioredis/v5.11.1"
+    fetched_at: "2026-11-14T13:41:20-03:00"
   "@aws-sdk/client-s3":
     version: "^3.1169.0"
     context7_id: "/aws/aws-sdk-js-v3"
@@ -21,16 +21,16 @@ libs:
     context7_id: "/aws/aws-sdk-js-v3"
     fetched_at: "2026-11-14T10:04:00-03:00"
   "ffmpeg / ffprobe":
-    version: "Debian package in the worker image (exact version recorded when the worker Dockerfile is written)"
+    version: "5.1.9-0+deb12u1 (Debian bookworm package, installed in Dockerfile.dev)"
     context7_id: "/websites/ffmpeg_ffmpeg-all"
     fetched_at: "2026-11-14T10:04:00-03:00"
 sources_mtime:
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T10:03:29-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T10:28:20-03:00"
 ---
 
 # Library References — Phase 03 (Upload e Processamento de Vídeos)
 
-Distilled from Context7 on 2026-11-14 for the surfaces the decided TDs use. Versions are the latest checked on the npm registry on 2026-11-14 (`npm view`). Context7 did not have a snapshot for bullmq 6.7.6, so the closest one, `v6.5.3`, was used (same 6.x major).
+Distilled from Context7 on 2026-11-14 for the surfaces the decided TDs use. Versions are the latest checked on the npm registry on 2026-11-14 (`npm view`). Context7 did not have a snapshot for bullmq 6.7.6, so the closest one, `v6.5.3`, was used (same 6.x major). ioredis is the exception: it is pinned to `^5.11.1` per the 2026-11-14 Revision of `phase-03-videos/TD-02` (typeorm peer dependency), and its notes were rechecked against Context7 `/redis/ioredis/v5.11.1`.
 
 ### bullmq
 
