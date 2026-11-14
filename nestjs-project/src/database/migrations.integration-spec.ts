@@ -14,6 +14,11 @@ const MANAGED_TABLES = [
   'verification_tokens',
 ];
 
+// Postgres enum types created by the migrations. DROP TABLE does not remove
+// them, so they must be dropped explicitly or runMigrations() fails on a
+// database that was already migrated (e.g. via `npm run migration:run`).
+const MANAGED_ENUM_TYPES = ['verification_tokens_type_enum'];
+
 describe('Database migrations (integration)', () => {
   let dataSource: DataSource;
 
@@ -37,6 +42,11 @@ describe('Database migrations (integration)', () => {
       ),
       dataSource.query(`DROP TABLE IF EXISTS "migrations" CASCADE`),
     ]);
+    await Promise.all(
+      MANAGED_ENUM_TYPES.map((type) =>
+        dataSource.query(`DROP TYPE IF EXISTS "${type}" CASCADE`),
+      ),
+    );
   });
 
   afterAll(async () => {
