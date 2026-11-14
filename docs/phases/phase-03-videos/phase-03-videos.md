@@ -116,7 +116,7 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 ### SI-03.4 — Endpoint POST /videos (pré-cadastro e início do upload)
 
 **Route:** POST /videos
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-create.plan.md`
 **Authorization:** Authenticated (vídeo criado no canal do usuário autenticado)
 
 **Description:** Ao iniciar o upload, cria o vídeo como `draft` e abre o multipart no storage, devolvendo o tamanho de parte que o cliente deve usar. Nenhum byte de vídeo passa pela API.
@@ -154,7 +154,7 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 ### SI-03.5 — Endpoint POST /videos/:publicId/upload/part-urls
 
 **Route:** POST /videos/:publicId/upload/part-urls
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-upload-part-urls.plan.md`
 **Authorization:** Owner
 
 **Description:** Assina sob demanda as URLs de `PUT` das partes pedidas e registra atividade no upload. É o mecanismo de re-assinatura que permite retomar o envio.
@@ -190,7 +190,7 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 ### SI-03.6 — Endpoint GET /videos/:publicId/upload/parts (retomada)
 
 **Route:** GET /videos/:publicId/upload/parts
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-upload-parts.plan.md`
 **Authorization:** Owner
 
 **Description:** Lista as partes que já estão no storage, para o cliente retomar o upload depois de uma falha de conexão sem reenviar o que já foi.
@@ -220,7 +220,7 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 ### SI-03.7 — Endpoint POST /videos/:publicId/upload/complete e enfileiramento
 
 **Route:** POST /videos/:publicId/upload/complete
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-upload-complete.plan.md`
 **Authorization:** Owner
 
 **Description:** Fecha o multipart, confere o tamanho montado, move o vídeo para `processing` e publica o job de processamento de forma idempotente.
@@ -384,7 +384,7 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 ### SI-03.12 — Endpoint GET /videos/:publicId (URL única do vídeo)
 
 **Route:** GET /videos/:publicId
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-get.plan.md`
 **Authorization:** Anonymous (`@Public()`)
 
 **Description:** Resolve o vídeo pela sua URL única (`public_id`) e devolve status, metadados e a thumbnail assinada, permitindo acompanhar o processamento.
@@ -418,7 +418,7 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 ### SI-03.13 — Endpoint GET /videos/:publicId/stream
 
 **Route:** GET /videos/:publicId/stream
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-stream.plan.md`
 **Authorization:** Anonymous (`@Public()`)
 
 **Description:** Entrega uma URL pré-assinada para reprodução por streaming; o storage atende `Range`/`206` direto, sem o vídeo passar pela API.
@@ -449,7 +449,7 @@ Entregar upload de vídeos de até 10GB sem impacto na performance, com pré-cad
 ### SI-03.14 — Endpoint GET /videos/:publicId/download
 
 **Route:** GET /videos/:publicId/download
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-download.plan.md`
 **Authorization:** Anonymous (`@Public()`)
 
 **Description:** Entrega uma URL pré-assinada que faz o navegador baixar o arquivo com o nome original, também servida direto pelo storage.
