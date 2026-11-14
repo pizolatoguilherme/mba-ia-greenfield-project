@@ -93,6 +93,7 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (BullMQ + Redis via `@nestjs/bullmq`)**. It is the documented NestJS path, and the processing job needs exactly what it ships: attempts with backoff, `jobId` deduplication for idempotent enqueue, worker concurrency, and a job scheduler (used by TD-11). The one cost is one extra container, which is the queue box the architecture diagram already reserves. Option B is the natural fallback if an extra container must be avoided, since application code would not change. Its newness argues against making it the default for the core pipeline.
 
 **Decision:** A (BullMQ + Redis via `@nestjs/bullmq`)
+**Libraries:** bullmq@^6.7.6, @nestjs/bullmq@^12.0.2, ioredis@^6.0.0
 
 ---
 
@@ -127,6 +128,11 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (presigned S3 multipart, direct to storage)**. It is the only option where no video bytes cross the API (or a BFF), so it satisfies "sem impacto na performance" and fits the Strict BFF rule. Resume comes from `ListParts` plus re-signing. The backend sets the part size and returns it in the init response. 64 MiB would be a reasonable value: a 10 GB file then needs about 160 parts, well inside the 5 MiB–5 GiB and 10,000-part limits. The backend enforces the 10 GB ceiling twice: it rejects declared sizes above it at init, and it checks the assembled object size before accepting `complete`. Part URLs are short-lived and re-signed on demand. Depends on TD-04 (public endpoint for signing).
 
 **Decision:** A (presigned S3 multipart, client → storage directly)
+**Libraries:** @aws-sdk/client-s3@^3.1169.0, @aws-sdk/s3-request-presigner@^3.1169.0
+
+**Revisions:**
+- 2026-11-14 — Part size and part-URL lifetime are fixed by `video-upload-delivery-limits/TD-01` (16 MiB, ≤ 640 parts for 10 GiB) and `video-upload-delivery-limits/TD-02` (1 h); the "64 MiB" figure in the Recommendation above was indicative only. Rationale: Parâmetros fixados em doc de limites dedicado (resolves `phase-03-videos/validation.md` IC-2).
+- 2026-11-14 — Upload-init contract: the request carries `filename`, `size`, `contentType` and a **required** `title`; the draft row persists all four. `contentType` must be in the allowlist `video/mp4`, `video/quicktime`, `video/webm`, `video/x-matroska`, otherwise init is rejected; ffprobe in the worker remains the final check (an unreadable file ends `failed` per TD-10). Rationale: Pré-cadastro precisa de contrato de init definido (resolves `phase-03-videos/validation.md` AMB-1).
 
 ---
 
@@ -158,6 +164,9 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (internal `S3_ENDPOINT` + public `S3_PUBLIC_ENDPOINT`)**. It is the only option that keeps the Compose service-name rule for server traffic and still hands clients reachable URLs without per-machine setup. The production story (S3 or a CDN host) is a value change, not a code change. URLs the worker uses for its own reads (TD-06) are signed with the internal client.
 
 **Decision:** A (internal `S3_ENDPOINT` + public `S3_PUBLIC_ENDPOINT`)
+
+**Revisions:**
+- 2026-11-14 — Storage integration tests run against the real MinIO service in Compose (internal `S3_ENDPOINT`), covering presigned multipart, presigned GET with `Range`/`206` and bucket CORS; this is a deliberate deviation from the local-filesystem storage strategy in `testing-guide-nestjs-project` → `references/external-systems.md`. Rationale: o fluxo pré-assinado só é exercitado contra S3 real (resolves `phase-03-videos/validation.md` IC-1).
 
 ---
 
@@ -215,6 +224,10 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (same codebase, separate entrypoint and container)**. It isolates the CPU-heavy work as the architecture requires without duplicating the domain model across two packages. The worker reads the source through a presigned GET signed with the internal endpoint (TD-04), passed straight to `ffprobe`/`ffmpeg` as an HTTP input. Both tools use HTTP range reads, so metadata extraction and a seek-based thumbnail grab never download all 10 GB to local disk. FFmpeg is called through `node:child_process` (`spawn`, argument array, no shell), because `fluent-ffmpeg` is deprecated on npm. Retries use queue attempts with exponential backoff. The terminal failure state is defined in TD-10.
 
 **Decision:** A (same codebase, separate entrypoint and container)
+**Libraries:** ffmpeg / ffprobe (system binary, Debian package in the worker image)
+
+**Revisions:**
+- 2026-11-14 — Persisted metadata from ffprobe: typed columns `duration_seconds`, `width`, `height`, `video_codec`, `audio_codec`, `bitrate`, `container`, plus a `metadata` `jsonb` column holding a raw ffprobe summary for future use. Rationale: "metadados" precisava de lista e formato definidos (resolves `phase-03-videos/validation.md` AMB-2).
 
 ---
 
@@ -310,6 +323,7 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (presigned GET via a JSON endpoint)**. MinIO and S3 already implement `Range`/`206` correctly, so delivery stays off the API hot path, matching the diagram. The bucket stays private, so Phases 04 and 05 can add visibility rules at the signing endpoint without changing the transport. Returning JSON instead of a `302` keeps a future BFF a plain Route Handler and makes expiry explicit for the client. The endpoints are `@Public()` and only sign for videos with status `ready` (TD-10). Other states get a domain error.
 
 **Decision:** A (presigned GET via JSON endpoint)
+**Libraries:** @aws-sdk/client-s3@^3.1169.0, @aws-sdk/s3-request-presigner@^3.1169.0
 
 ---
 
@@ -371,6 +385,9 @@ _Subprojects in scope:_
 **Recommendation:** **Option B (scheduled sweep job)**. It is the only option that keeps database and storage consistent and closes the completed-but-not-enqueued gap from TD-05, without depending on storage configuration that differs between MinIO and S3. A 24 h threshold for `draft` uploads gives ample margin for slow 10 GB uploads while bounding orphaned storage. Storage-side expiry (A) can stay on as a second safety net.
 
 **Decision:** B (scheduled sweep job in the worker)
+
+**Revisions:**
+- 2026-11-14 — The 24 h threshold is measured from the video's last upload activity (`last_activity_at`, updated on each part-URL signing and on `complete`), not from creation, per `video-upload-delivery-limits/TD-04`; hourly sweep cadence unchanged. Rationale: Parâmetros fixados em doc de limites dedicado (resolves `phase-03-videos/validation.md` IC-2).
 
 ---
 
