@@ -93,7 +93,10 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (BullMQ + Redis via `@nestjs/bullmq`)**. It is the documented NestJS path, and the processing job needs exactly what it ships: attempts with backoff, `jobId` deduplication for idempotent enqueue, worker concurrency, and a job scheduler (used by TD-11). The one cost is one extra container, which is the queue box the architecture diagram already reserves. Option B is the natural fallback if an extra container must be avoided, since application code would not change. Its newness argues against making it the default for the core pipeline.
 
 **Decision:** A (BullMQ + Redis via `@nestjs/bullmq`)
-**Libraries:** bullmq@^6.7.6, @nestjs/bullmq@^12.0.2, ioredis@^6.0.0
+**Libraries:** bullmq@^6.7.6, @nestjs/bullmq@^12.0.2, ioredis@^5.11.1
+
+**Revisions:**
+- 2026-11-14 — Redis client pinned to `ioredis@^5.11.1` instead of `^6.0.0`: `typeorm@0.3.28` declares the optional peer `ioredis@^5.0.4` and npm rejects ioredis 6 (ERESOLVE), while `bullmq@6.7.6` accepts `ioredis >=5.0.0`; Option A (BullMQ + Redis) is unchanged. Rationale: compatibilidade de peer dependency com o typeorm instalado, detectada na SI-03.1 do /implement 3.
 
 ---
 
