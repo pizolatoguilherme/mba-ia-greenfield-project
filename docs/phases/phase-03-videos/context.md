@@ -4,6 +4,7 @@ name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-11-14T07:55:58-03:00"
   docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T09:25:29-03:00"
+  docs/decisions/technical-decisions-video-upload-delivery-limits.md: "2026-11-14T09:54:48-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-14T07:56:05-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-11-14T07:56:05-03:00"
   docs/decisions/technical-decisions-next-frontend-openapi-typing.md: "2026-11-14T07:56:05-03:00"
@@ -66,10 +67,15 @@ Upload de arquivos grandes sem travar o sistema, processamento automático do v�
 | phase-03-videos/TD-09 | phase | Cross-layer | Streaming and Download Delivery | decided | A (presigned GET via JSON endpoint) | — |
 | phase-03-videos/TD-10 | phase | Cross-layer | Video Status Lifecycle and Failure Handling | decided | A (single enum `draft → processing → ready \| failed`) | — |
 | phase-03-videos/TD-11 | phase | Backend | Abandoned Upload Cleanup | decided | B (scheduled sweep job in the worker) | — |
+| video-upload-delivery-limits/TD-01 | ad-hoc | Cross-layer | Multipart Part Size | decided | A (fixed 16 MiB) | — |
+| video-upload-delivery-limits/TD-02 | ad-hoc | Cross-layer | Presigned Part-URL Lifetime | decided | B (1 hour) | — |
+| video-upload-delivery-limits/TD-03 | ad-hoc | Cross-layer | Presigned Stream/Download GET-URL Lifetime | decided | B (6 hours) | — |
+| video-upload-delivery-limits/TD-04 | ad-hoc | Backend | Abandoned-Upload Cleanup Threshold | decided | B (24 h of inactivity, tracked by `last_activity_at`) | — |
 
 _Source files:_
 
 - phase-03-videos — `docs/decisions/technical-decisions-phase-03-videos.md` (scope_type: phase, related_phases: [3])
+- video-upload-delivery-limits — `docs/decisions/technical-decisions-video-upload-delivery-limits.md` (scope_type: ad-hoc, related_phases: [3])
 
 ## Capability Coverage
 
@@ -77,69 +83,89 @@ _Source files:_
 |-----------------------------------|------------|
 | Serviço de armazenamento de arquivos (vídeos e thumbnails) | phase-03-videos/TD-01 |
 | Serviço de processamento em segundo plano (filas) | phase-03-videos/TD-02, phase-03-videos/TD-06 |
-| Upload de vídeos com suporte a arquivos de até 10GB sem impacto na performance | phase-03-videos/TD-03, phase-03-videos/TD-04, phase-03-videos/TD-11 |
-| Pré-cadastro automático do vídeo como rascunho ao iniciar o upload | phase-03-videos/TD-10, phase-03-videos/TD-11 |
+| Upload de vídeos com suporte a arquivos de até 10GB sem impacto na performance | phase-03-videos/TD-03, phase-03-videos/TD-04, phase-03-videos/TD-11, video-upload-delivery-limits/TD-01, video-upload-delivery-limits/TD-02, video-upload-delivery-limits/TD-04 |
+| Pré-cadastro automático do vídeo como rascunho ao iniciar o upload | phase-03-videos/TD-10, phase-03-videos/TD-11, video-upload-delivery-limits/TD-04 |
 | Processamento automático do vídeo após upload (extração de duração e metadados) | phase-03-videos/TD-05, phase-03-videos/TD-06, phase-03-videos/TD-10 |
 | Geração automática de thumbnail a partir de um frame do vídeo | phase-03-videos/TD-01, phase-03-videos/TD-06, phase-03-videos/TD-07 |
 | URL única por vídeo, sem conflito com outros vídeos | phase-03-videos/TD-08 |
-| Reprodução via streaming (sem necessidade de download completo) | phase-03-videos/TD-04, phase-03-videos/TD-09 |
-| Download do vídeo pelo usuário | phase-03-videos/TD-04, phase-03-videos/TD-09 |
+| Reprodução via streaming (sem necessidade de download completo) | phase-03-videos/TD-04, phase-03-videos/TD-09, video-upload-delivery-limits/TD-03 |
+| Download do vídeo pelo usuário | phase-03-videos/TD-04, phase-03-videos/TD-09, video-upload-delivery-limits/TD-03 |
 
 ## Decisions Detail
 
 ### phase-03-videos/TD-01
 
-**Recommendation:** Storage cost is an explicit concern in the plan, and source videos (up to 10 GB) and thumbnails (tens of KB) have opposite access and retention profiles. Keeping them apart lets a lifecycle or tier policy target sources alone. The extra env key and bootstrap step cost little. Keys are derived from the internal video UUID, never from the user-supplied filename, so uploads cannot collide or traverse paths. Phase 04's custom thumbnails can live in the same thumbnails bucket under a different key.
+**Recommendation:** Separate buckets for videos and thumbnails. Storage cost is an explicit concern in the plan, and source videos (up to 10 GB) and thumbnails (tens of KB) have opposite access and retention profiles. Keeping them apart lets a lifecycle or tier policy target sources alone. The extra env key and bootstrap step cost little. Keys are derived from the internal video UUID, never from the user-supplied filename, so uploads cannot collide or traverse paths. Phase 04's custom thumbnails can live in the same thumbnails bucket under a different key.
 **Libraries:** —
 
 ### phase-03-videos/TD-02
 
-**Recommendation:** It is the documented NestJS path, and the processing job needs exactly what it ships: attempts with backoff, `jobId` deduplication for idempotent enqueue, worker concurrency, and a job scheduler (used by TD-11). The one cost is one extra container, which is the queue box the architecture diagram already reserves. Option B is the natural fallback if an extra container must be avoided, since application code would not change. Its newness argues against making it the default for the core pipeline.
+**Recommendation:** BullMQ + Redis via `@nestjs/bullmq`. It is the documented NestJS path, and the processing job needs exactly what it ships: attempts with backoff, `jobId` deduplication for idempotent enqueue, worker concurrency, and a job scheduler (used by TD-11). The one cost is one extra container, which is the queue box the architecture diagram already reserves. Option B is the natural fallback if an extra container must be avoided, since application code would not change. Its newness argues against making it the default for the core pipeline.
 **Libraries:** —
 
 ### phase-03-videos/TD-03
 
-**Recommendation:** It is the only option where no video bytes cross the API (or a BFF), so it satisfies "sem impacto na performance" and fits the Strict BFF rule. Resume comes from `ListParts` plus re-signing. The backend sets the part size and returns it in the init response. 64 MiB would be a reasonable value: a 10 GB file then needs about 160 parts, well inside the 5 MiB–5 GiB and 10,000-part limits. The backend enforces the 10 GB ceiling twice: it rejects declared sizes above it at init, and it checks the assembled object size before accepting `complete`. Part URLs are short-lived and re-signed on demand. Depends on TD-04 (public endpoint for signing).
+**Recommendation:** Presigned S3 multipart, direct to storage. It is the only option where no video bytes cross the API (or a BFF), so it satisfies "sem impacto na performance" and fits the Strict BFF rule. Resume comes from `ListParts` plus re-signing. The backend sets the part size and returns it in the init response. 64 MiB would be a reasonable value: a 10 GB file then needs about 160 parts, well inside the 5 MiB–5 GiB and 10,000-part limits. The backend enforces the 10 GB ceiling twice: it rejects declared sizes above it at init, and it checks the assembled object size before accepting `complete`. Part URLs are short-lived and re-signed on demand. Depends on TD-04 (public endpoint for signing).
 **Libraries:** —
 
 ### phase-03-videos/TD-04
 
-**Recommendation:** It is the only option that keeps the Compose service-name rule for server traffic and still hands clients reachable URLs without per-machine setup. The production story (S3 or a CDN host) is a value change, not a code change. URLs the worker uses for its own reads (TD-06) are signed with the internal client.
+**Recommendation:** Internal `S3_ENDPOINT` + public `S3_PUBLIC_ENDPOINT`. It is the only option that keeps the Compose service-name rule for server traffic and still hands clients reachable URLs without per-machine setup. The production story (S3 or a CDN host) is a value change, not a code change. URLs the worker uses for its own reads (TD-06) are signed with the internal client.
 **Libraries:** —
 
 ### phase-03-videos/TD-05
 
-**Recommendation:** The client already has to call the API to complete the multipart upload, so that call is the natural trigger. A stays inside the plain S3 API that both MinIO and production S3 share, while B ties the pipeline to vendor-specific notification setup. The crash window is closed by deduplicating with `jobId` and by the scheduled sweep in TD-11.
+**Recommendation:** API `complete` endpoint publishes the job. The client already has to call the API to complete the multipart upload, so that call is the natural trigger. A stays inside the plain S3 API that both MinIO and production S3 share, while B ties the pipeline to vendor-specific notification setup. The crash window is closed by deduplicating with `jobId` and by the scheduled sweep in TD-11.
 **Libraries:** —
 
 ### phase-03-videos/TD-06
 
-**Recommendation:** It isolates the CPU-heavy work as the architecture requires without duplicating the domain model across two packages. The worker reads the source through a presigned GET signed with the internal endpoint (TD-04), passed straight to `ffprobe`/`ffmpeg` as an HTTP input. Both tools use HTTP range reads, so metadata extraction and a seek-based thumbnail grab never download all 10 GB to local disk. FFmpeg is called through `node:child_process` (`spawn`, argument array, no shell), because `fluent-ffmpeg` is deprecated on npm. Retries use queue attempts with exponential backoff. The terminal failure state is defined in TD-10.
+**Recommendation:** Same codebase, separate entrypoint and container. It isolates the CPU-heavy work as the architecture requires without duplicating the domain model across two packages. The worker reads the source through a presigned GET signed with the internal endpoint (TD-04), passed straight to `ffprobe`/`ffmpeg` as an HTTP input. Both tools use HTTP range reads, so metadata extraction and a seek-based thumbnail grab never download all 10 GB to local disk. FFmpeg is called through `node:child_process` (`spawn`, argument array, no shell), because `fluent-ffmpeg` is deprecated on npm. Retries use queue attempts with exponential backoff. The terminal failure state is defined in TD-10.
 **Libraries:** —
 
 ### phase-03-videos/TD-07
 
-**Recommendation:** Fixed 10% offset with fast seek, output as a JPEG with 1280 px maximum width, aspect preserved. One cheap and deterministic frame read fits the "sem impacto" goal and the range-read approach in TD-06. JPEG renders everywhere with no format negotiation. Phase 04 introduces custom thumbnails, so an uploader unhappy with the automatic frame has a remedy, which makes B's extra CPU hard to justify now. The output key follows TD-01.
+**Recommendation:** Fixed 10% offset, fast seek, output as a JPEG with 1280 px maximum width, aspect preserved. One cheap and deterministic frame read fits the "sem impacto" goal and the range-read approach in TD-06. JPEG renders everywhere with no format negotiation. Phase 04 introduces custom thumbnails, so an uploader unhappy with the automatic frame has a remedy, which makes B's extra CPU hard to justify now. The output key follows TD-01.
 **Libraries:** —
 
 ### phase-03-videos/TD-08
 
-**Recommendation:** It meets both requirements in the plan, short and never conflicting, and stays unguessable, which the unlisted visibility in Phases 04 and 05 depends on. The UUID primary key remains the internal reference for foreign keys and storage keys (TD-01). Every public route uses `public_id`.
+**Recommendation:** Random 11-char base64url `public_id`, unique index. It meets both requirements in the plan, short and never conflicting, and stays unguessable, which the unlisted visibility in Phases 04 and 05 depends on. The UUID primary key remains the internal reference for foreign keys and storage keys (TD-01). Every public route uses `public_id`.
 **Libraries:** —
 
 ### phase-03-videos/TD-09
 
-**Recommendation:** MinIO and S3 already implement `Range`/`206` correctly, so delivery stays off the API hot path, matching the diagram. The bucket stays private, so Phases 04 and 05 can add visibility rules at the signing endpoint without changing the transport. Returning JSON instead of a `302` keeps a future BFF a plain Route Handler and makes expiry explicit for the client. The endpoints are `@Public()` and only sign for videos with status `ready` (TD-10). Other states get a domain error.
+**Recommendation:** Presigned GET via a JSON endpoint. MinIO and S3 already implement `Range`/`206` correctly, so delivery stays off the API hot path, matching the diagram. The bucket stays private, so Phases 04 and 05 can add visibility rules at the signing endpoint without changing the transport. Returning JSON instead of a `302` keeps a future BFF a plain Route Handler and makes expiry explicit for the client. The endpoints are `@Public()` and only sign for videos with status `ready` (TD-10). Other states get a domain error.
 **Libraries:** —
 
 ### phase-03-videos/TD-10
 
-**Recommendation:** It reflects the phase's lifecycle one-to-one in the database, which is what this phase must deliver, and keeps one source of truth for the API and the worker. The cost lands in Phase 04, which adds publication and visibility as separate fields rather than new values of this enum. Transitions are guarded in the service: `complete` is only accepted from `draft`, and the worker only acts on `processing`, so a redelivered job is a no-op once the video is `ready`. When the job fails its final retry attempt (TD-02, TD-06), the worker sets `failed` with a short `failure_reason`. User-triggered reprocessing is out of scope.
+**Recommendation:** Single enum `draft → processing → ready | failed`. It reflects the phase's lifecycle one-to-one in the database, which is what this phase must deliver, and keeps one source of truth for the API and the worker. The cost lands in Phase 04, which adds publication and visibility as separate fields rather than new values of this enum. Transitions are guarded in the service: `complete` is only accepted from `draft`, and the worker only acts on `processing`, so a redelivered job is a no-op once the video is `ready`. When the job fails its final retry attempt (TD-02, TD-06), the worker sets `failed` with a short `failure_reason`. User-triggered reprocessing is out of scope.
 **Libraries:** —
 
 ### phase-03-videos/TD-11
 
-**Recommendation:** It is the only option that keeps database and storage consistent and closes the completed-but-not-enqueued gap from TD-05, without depending on storage configuration that differs between MinIO and S3. A 24 h threshold for `draft` uploads gives ample margin for slow 10 GB uploads while bounding orphaned storage. Storage-side expiry (A) can stay on as a second safety net.
+**Recommendation:** Scheduled sweep job. It is the only option that keeps database and storage consistent and closes the completed-but-not-enqueued gap from TD-05, without depending on storage configuration that differs between MinIO and S3. A 24 h threshold for `draft` uploads gives ample margin for slow 10 GB uploads while bounding orphaned storage. Storage-side expiry (A) can stay on as a second safety net.
+**Libraries:** —
+
+### video-upload-delivery-limits/TD-01
+
+**Recommendation:** Fixed 16 MiB. The plan explicitly asks for resuming after connection failures, and a 16 MiB part keeps the cost of a failure small even on a 1 Mbps link. The 640-part maximum is far from the 10,000 limit. The extra signatures are cheap because presigning is a local computation (`phase-03-videos/TD-04`). Option C solves a part-count problem that a fixed 10 GB ceiling never creates.
+**Libraries:** —
+
+### video-upload-delivery-limits/TD-02
+
+**Recommendation:** 1 hour. TD-03 already relies on on-demand re-signing, so the TTL only has to cover one batch on a slow link. An hour does that with margin while keeping exposure narrow. 15 minutes forces frequent refreshes on the slow links the resume requirement targets. 24 hours trades a bloated init response for no gain over re-signing.
+**Libraries:** —
+
+### video-upload-delivery-limits/TD-03
+
+**Recommendation:** 6 hours. It keeps playback and a resumed 10 GiB download on modest links working without the refresh path, so `expiresAt` becomes a safety net rather than a requirement. A leaked link also stays bounded to the same day, which preserves the unlisted model of the later phases. One value for both stream and download keeps a single config key.
+**Libraries:** —
+
+### video-upload-delivery-limits/TD-04
+
+**Recommendation:** 24 h of inactivity, tracked by `last_activity_at`. It confirms the 24 h figure from `phase-03-videos/TD-11` while measuring it from the last activity, so slow-but-active uploads survive and abandoned ones are reclaimed within a day. The added column is cheap compared with either killing real uploads (A) or holding orphaned gigabytes for a week (C). The hourly sweep cadence from TD-11 stays unchanged.
 **Libraries:** —
 
 ## Inherited Decisions Detail
