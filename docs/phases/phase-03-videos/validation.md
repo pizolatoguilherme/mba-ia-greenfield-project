@@ -1,11 +1,11 @@
 ---
 kind: phase
 name: phase-03-videos
-status: dirty
+status: clean
 issue_count: 0
 sources_mtime:
-  docs/phases/phase-03-videos/context.md: "2026-11-14T09:58:08-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T09:25:29-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-11-14T10:05:05-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-14T10:03:29-03:00"
   docs/decisions/technical-decisions-video-upload-delivery-limits.md: "2026-11-14T09:54:48-03:00"
 issues:
   - id: IC-1
@@ -66,7 +66,10 @@ _None._ _(`## UI Inventory` is in the deferred state, so Check 7 does not apply.
 ## Resolved Issues
 
 - **IC-1** _(resolved_by phase-03-videos/TD-04, Revision 2026-11-14)_ — Testing guide prescribes local-filesystem storage in tests; TDs require MinIO via S3 API. User chose (a): storage integration tests run against the real MinIO service in Compose, recorded as a deliberate deviation from the guide.
-- **IC-2** _(resolved_by phase-03-videos/TD-03, phase-03-videos/TD-11, Revisions 2026-11-14)_ — Part size 64 MiB (TD-03) vs 16 MiB (`video-upload-delivery-limits/TD-01`). Revisions appended: TD-03 points part size / part-URL TTL to `video-upload-delivery-limits/TD-01`/`TD-02`; TD-11 measures the 24 h from `last_activity_at` per `video-upload-delivery-limits/TD-04`. Rationale: parâmetros fixados em doc de limites dedicado.
-- **AMB-1** _(resolved_by phase-03-videos/TD-03, Revision 2026-11-14)_ — Init carries `filename`, `size`, `contentType` and a required `title` (all persisted on the draft); `contentType` allowlist `video/mp4`, `video/quicktime`, `video/webm`, `video/x-matroska`; ffprobe in the worker is the final check (`failed` on unreadable input).
+- **IC-2** _(resolved_by phase-03-videos/TD-03, phase-03-videos/TD-11, Revisions 2026-11-14)_ — Part size was 64 MiB in TD-03 vs 16 MiB in `video-upload-delivery-limits/TD-01`.
+  - TD-03 Revision: part size and part-URL TTL now point to `video-upload-delivery-limits/TD-01` / `TD-02`.
+  - TD-11 Revision: the 24 h are measured from `last_activity_at`, per `video-upload-delivery-limits/TD-04`.
+  - Rationale: parâmetros fixados em doc de limites dedicado.
+- **AMB-1** _(resolved_by phase-03-videos/TD-03, Revision 2026-11-14)_ — Init carries `filename`, `size`, `contentType` and a required `title`, all persisted on the draft. `contentType` allowlist: `video/mp4`, `video/quicktime`, `video/webm`, `video/x-matroska`. ffprobe in the worker is the final check, with `failed` on unreadable input.
 - **AMB-2** _(resolved_by phase-03-videos/TD-06, Revision 2026-11-14)_ — Persisted metadata: typed columns `duration_seconds`, `width`, `height`, `video_codec`, `audio_codec`, `bitrate`, `container`, plus `metadata` `jsonb` with a raw ffprobe summary.
-- **MD-1** _(resolved_by video-upload-delivery-limits/TD-01, video-upload-delivery-limits/TD-02, video-upload-delivery-limits/TD-03, video-upload-delivery-limits/TD-04)_ — Upload/delivery numeric policies (part size, URL TTLs) are suggested, not decided. Closed by the ad-hoc research doc `video-upload-delivery-limits` (`related_phases: [3]`), which decides part size 16 MiB, part-URL TTL 1 h, GET-URL TTL 6 h and a cleanup threshold of 24 h of inactivity.
+- **MD-1** _(resolved_by video-upload-delivery-limits/TD-01, video-upload-delivery-limits/TD-02, video-upload-delivery-limits/TD-03, video-upload-delivery-limits/TD-04)_ — Upload/delivery numeric policies (part size, URL TTLs) were suggested, not decided. Closed by the ad-hoc research doc `video-upload-delivery-limits` (`related_phases: [3]`), which decides part size 16 MiB, part-URL TTL 1 h, GET-URL TTL 6 h and a cleanup threshold of 24 h of inactivity.
